@@ -1,0 +1,9 @@
+venv_omnifold/
+__pycache__/
+FormattedData/
+logs/
+sbnd/runs/
+sbnd/covariance/
+sbnd/exported_weights/
+sbnd/plots_*/
+nohup.out
