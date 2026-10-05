@@ -130,7 +130,7 @@ selection efficiency to `FormattedData/`. It should say
 
 `--sel-file` and `--final-stage` choose another pickle or another cut.
 
-## 2. Closure test, in the background (2-3 min)
+## 2. Closure test, in the background (1 min)
 
 ```bash
 nohup bash sbnd/runOmnifold_sbnd_closure.sh --niter 3 --ntrial 1 &
@@ -161,11 +161,11 @@ the single GENIE and flux knobs with the combined throws.
 - `--thresh 0.005`: train a source if its shape-only uncertainty is above 0.5 % in any bin
 - `--shape-only`: rescale every universe to the nominal total (default is to keep the normalisation)
 
-## 4. Fake-data test (3-5 min)
+## 4. Fake-data test (2-3 min)
 
 ```bash
 python3 sbnd/RunStudies.py make-fakedata --var true_p --alpha 0.3
-nohup bash sbnd/runOmnifold_sbnd_fakedata.sh --var true_p --alpha 0.3 --niter 5 --ntrial 1 &
+nohup bash sbnd/runOmnifold_sbnd_fakedata.sh --var true_p --alpha 0.3 &
 ```
 
 The fake data is the MC with its truth reweighted by `1 + alpha * z`, where `z`
@@ -175,6 +175,10 @@ truth.
 - `--var`: which truth variable is tilted. `true_p` (used here), `true_costheta`, or `both` to tilt momentum and angle together.
 - `--alpha`: tilt strength (0.3 is 30 % per standard deviation)
 - `--mode universe --source <name> --universe-idx <i>`: use one systematic universe as fake data instead of a tilt
+
+The training uses the same settings as the real analysis (10 iterations, 3
+networks per iteration); `--niter` and `--ntrial` change them as for the closure.
+While it runs, carry on with step 5.
 
 The sample is labelled by a tag, here `tilt_p_alpha0.3` (`tilt_costheta_...`,
 `tilt_both_...` for the others). The training goes to
@@ -245,6 +249,8 @@ breakdown by family per bin. Other options:
 
 ## 8. Cross section (30 s)
 
+Once `logs/fdt_tilt_p_alpha0.3.log` ends with `Done`:
+
 ```bash
 python3 sbnd/BuildResults.py xsec --tilted-var true_p --alpha 0.3 --cov-source all
 ```
@@ -275,7 +281,7 @@ Options:
 
 ## Things to try
 
-- Rerun the closure with the full settings (`--niter 10 --ntrial 7`) and compare.
+- Rerun the closure with the full settings (no `--niter`/`--ntrial`, about 5 min) and compare.
 - Make fake data with `--var true_costheta` or `--var both`, train it, and see whether it is recovered. There are no ML replicas for these tags, so `xsec_ml_*` is skipped.
 - Run `covariance --source all --mode direct` and compare the totals with hybrid.
 - In `uncertainty_budget_true_p.png`, which family dominates, and how much of it is normalisation?
