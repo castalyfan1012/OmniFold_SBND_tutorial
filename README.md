@@ -100,103 +100,103 @@ rate uncertainties are included, as needed for an absolute cross section.
 
 # Tutorial
 
-The systematic universes and ML replicas take many hours to train, so they are
-taken from `pretrained_runs/`. The rest is run with smaller settings so it fits
-in about 15 minutes. Run everything on EAF, where `/exp/sbnd` is visible.
+The order is the same as in the full analysis:
+setup -> closure -> fake data -> systematics -> cross section.
+All trainings use 10 OmniFold iterations, as in the analysis. Only the
+systematic universes and ML replicas, which take many hours, are taken from
+`pretrained_runs/`. Run everything on EAF, where `/exp/sbnd` is visible.
 
-## 0. Get the code (1 min)
+## 1. Setup (1 min)
 
 ```bash
 cd ~
 git clone https://github.com/castalyfan1012/OmniFold_SBND_tutorial.git
 cd OmniFold_SBND_tutorial
 source setup.sh
-```
-
-`setup.sh` activates the shared Python environment; it should print
-`TensorFlow: 2.15.0`. Run all commands from this folder. In a new terminal,
-`cd` here and `source setup.sh` again.
-
-## 1. Format the inputs (30 s)
-
-```bash
 python3 sbnd/FormatData_SBND.py
 ```
 
-Keeps the true signal events that pass the last selection cut
-(`sel_start_dedx`) and writes the network inputs, the raw truth values and the
-selection efficiency to `FormattedData/`. It should say
-`Final N (reco & truth): 5,357`.
+`setup.sh` activates the shared Python environment and should print
+`TensorFlow: 2.15.0`. Run all commands from this folder; in a new terminal,
+`cd` here and `source setup.sh` again.
 
-`--sel-file` and `--final-stage` choose another pickle or another cut.
+`FormatData_SBND.py` keeps the true signal events that pass the last selection
+cut (`sel_start_dedx`) and writes the network inputs, the raw truth values and
+the selection efficiency to `FormattedData/`. It should say
+`Final N (reco & truth): 5,357`. `--sel-file` and `--final-stage` choose
+another pickle or another cut.
 
-## 2. Closure test, in the background (1 min)
+## 2. Closure test (2-3 min)
 
 ```bash
-nohup bash sbnd/runOmnifold_sbnd_closure.sh --niter 3 --ntrial 1 &
+nohup bash sbnd/runOmnifold_sbnd_closure.sh &
+tail -f logs/closure.log            # Ctrl-C stops tail only; wait for "Done"
+python3 sbnd/RunStudies.py check-closure
 ```
 
-The nominal MC is unfolded onto itself, so all weights should come out close to 1.
+The nominal MC is unfolded onto itself, so every weight should come out close
+to 1. `check-closure` compares the unfolded spectrum with the nominal truth
+using MC-stat errors and passes if the p-value is above 0.05 (`--pval-thresh`).
+Plots: `sbnd/plots_validation/closure_*.png`.
 
 - `--niter`: OmniFold iterations (default 10)
-- `--ntrial`: networks averaged in each iteration (default 7). More networks means less noise and a longer run.
+- `--ntrial`: networks averaged in each iteration (default 3, as for the fake data). The run time scales with it; `--ntrial 7` gives a smoother result in about twice the time.
 
-`tail -f logs/closure.log` follows the training (Ctrl-C stops `tail` only).
+## 3. Fake-data test (2-3 min)
 
-## 3. Systematic sources (1 min)
+```bash
+python3 sbnd/RunStudies.py make-fakedata --var true_p --alpha 0.3
+nohup bash sbnd/runOmnifold_sbnd_fakedata.sh --var true_p --alpha 0.3 &
+tail -f logs/fdt_tilt_p_alpha0.3.log     # wait for "Done"
+python3 sbnd/MakePlots.py validation --var true_p --alpha 0.3
+```
+
+The fake data is the MC with its truth reweighted by `1 + alpha * z`, where `z`
+is the standardised momentum. If the unfolding works, it gives back this tilted
+truth.
+
+- `--var`: which truth variable is tilted. `true_p` here; `true_costheta`, or `both` to tilt momentum and angle together.
+- `--alpha`: tilt strength (0.3 is 30 % per standard deviation)
+- `--mode universe --source <name> --universe-idx <i>`: use one systematic universe as fake data instead of a tilt
+- `--niter`, `--ntrial` on the training script: 10 and 3 by default
+
+The sample is labelled by a tag, here `tilt_p_alpha0.3` (`tilt_costheta_alpha0.3`,
+`tilt_both_alpha0.3` for the others). The training goes to
+`sbnd/runs/weights_sbnd_fakedata_tilt_p_alpha0.3/`.
+
+`MakePlots.py validation` checks the result before any systematics are used.
+It prints the pass/fail verdict (stat-only χ² of unfolded vs injected truth,
+pass if p > 0.05) and the χ²/ndf at every iteration, which shows whether 10
+iterations is enough. Plots in `sbnd/plots_validation/`: the injected spectrum,
+weight recovery, χ²/ndf vs iteration and the χ² per bin.
+
+- `--iter`: iteration used for the verdict (default 10)
+- `--pval-thresh 0.05`: p-value needed to pass
+
+## 4. Systematics (2-3 min)
 
 ```bash
 python3 sbnd/RunStudies.py list-sources
 python3 sbnd/RunStudies.py screen
+mkdir -p sbnd/runs
+ln -s /exp/sbnd/data/users/castalyf/OmniFold_SBND_data/pretrained_runs/weights_* sbnd/runs/
+python3 sbnd/RunStudies.py status
 ```
 
-`list-sources` prints every source, its family and how many universes have been
-trained so far.
+`list-sources` prints every source, its family and how many universes have
+been trained.
 
 `screen` computes each source without any training: the size per family and
-bin, with and without normalisation, and which sources should be trained
+bin, with and without normalisation, and which sources are worth training
 (saved to `sbnd/covariance/screen_sources.json`). It also compares the sum of
 the single GENIE and flux knobs with the combined throws.
 
 - `--thresh 0.005`: train a source if its shape-only uncertainty is above 0.5 % in any bin
 - `--shape-only`: rescale every universe to the nominal total (default is to keep the normalisation)
 
-## 4. Fake-data test (2-3 min)
-
-```bash
-python3 sbnd/RunStudies.py make-fakedata --var true_p --alpha 0.3
-nohup bash sbnd/runOmnifold_sbnd_fakedata.sh --var true_p --alpha 0.3 &
-```
-
-The fake data is the MC with its truth reweighted by `1 + alpha * z`, where `z`
-is the standardised momentum. If the unfolding works it gives back this tilted
-truth.
-
-- `--var`: which truth variable is tilted. `true_p` (used here), `true_costheta`, or `both` to tilt momentum and angle together.
-- `--alpha`: tilt strength (0.3 is 30 % per standard deviation)
-- `--mode universe --source <name> --universe-idx <i>`: use one systematic universe as fake data instead of a tilt
-
-The training uses the same settings as the real analysis (10 iterations, 3
-networks per iteration); `--niter` and `--ntrial` change them as for the closure.
-While it runs, carry on with step 5.
-
-The sample is labelled by a tag, here `tilt_p_alpha0.3` (`tilt_costheta_...`,
-`tilt_both_...` for the others). The training goes to
-`sbnd/runs/weights_sbnd_fakedata_tilt_p_alpha0.3/` and its log to
-`logs/fdt_tilt_p_alpha0.3.log`. The injected spectrum is plotted in
-`sbnd/plots_validation/fakedata_injected_tilt_p_alpha0.3.png`.
-
-## 5. Pretrained systematics (30 s)
-
-```bash
-mkdir -p sbnd/runs
-ln -s /exp/sbnd/data/users/castalyf/OmniFold_SBND_data/pretrained_runs/weights_* sbnd/runs/
-python3 sbnd/RunStudies.py status
-```
-
-`status` shows how many universes are done for each source and how many ML
-replicas there are for each fake-data tag. In the full analysis they are
-trained with (not needed now):
+The links bring in the pretrained universes and ML replicas, and `status`
+shows how many are done. In the full analysis they are trained with (not
+needed now):
 
 ```bash
 python3 sbnd/RunStudies.py run-syst --source screened --dry-run   # list what would be trained
@@ -210,19 +210,7 @@ bash sbnd/launch_syst.sh 3 2 --with-ml                            # 3 workers x 
 - `run-syst --redo`: retrain universes that are already done; without it they are skipped, so relaunching is safe
 - `run-ml-unc --n-replicas 50 --var true_p --alpha 0.3`: trains the same fake data 50 times with one network each; the spread is the ML uncertainty
 
-## 6. Closure check (30 s)
-
-Once `logs/closure.log` ends with `Done`:
-
-```bash
-python3 sbnd/RunStudies.py check-closure
-```
-
-Compares the unfolded spectrum with the nominal truth using MC-stat errors and
-passes if the p-value is above 0.05 (`--pval-thresh`). Plots:
-`sbnd/plots_validation/closure_*.png`.
-
-## 7. Covariances (1-2 min)
+Then build the covariances:
 
 ```bash
 python3 sbnd/BuildResults.py covariance --source ml --ml-tag tilt_p_alpha0.3 --ml-label 50rep
@@ -239,7 +227,7 @@ The second line builds the total of all families.
 - `--ml-as-stderr`: divide the ML covariance by the number of replicas. The central value we quote is the mean of the 50 replicas, and the uncertainty on a mean of N is σ/√N. Without this flag the ML term is the spread of one single training.
 - `--no-ml`: leave the ML term out
 
-The third line builds the `fds` group used in the fake-data plots.
+The third line builds the `fds` group, drawn as the band on the unfolded fake data.
 
 The printout lists every source (with `unfolded` or `direct`) and the
 breakdown by family per bin. Other options:
@@ -247,41 +235,34 @@ breakdown by family per bin. Other options:
 - `--source genie` or `--source genie__MaCCRES`: one family or one source
 - `--var true_p`: one variable only (default: both)
 
-## 8. Cross section (30 s)
-
-Once `logs/fdt_tilt_p_alpha0.3.log` ends with `Done`:
+## 5. Cross section (2 min)
 
 ```bash
 python3 sbnd/BuildResults.py xsec --tilted-var true_p --alpha 0.3 --cov-source all
+python3 sbnd/MakePlots.py results --var true_p --alpha 0.3
 ```
 
-Cross section from the fake-data training, with statistical error bars and the
-total uncertainty of `--cov-source` as a band
-(`sbnd/plots_xsec/xsec_fdt_tilt_p_alpha0.3_<var>.png`), plus a table in
+`BuildResults.py xsec` gives the cross section from the fake-data training,
+with statistical error bars and the total uncertainty of `--cov-source` as a
+band (`sbnd/plots_xsec/xsec_fdt_tilt_p_alpha0.3_<var>.png`), and a table in
 `sbnd/covariance/`.
 
 - `--tilted-var`, `--alpha` (or `--tag`): which fake data
 - `--cov-source`: group shown as the band (`all`, `fds`, `xsec`, `syst`)
 
-## 9. Plots (1-2 min)
+`MakePlots.py results` makes the rest:
 
-```bash
-python3 sbnd/MakePlots.py all --var true_p --alpha 0.3
-```
-
-- `sbnd/plots_validation/`: weight recovery, unfolded vs injected spectrum, χ²/ndf vs iteration, and a pass/fail line in the printout
-- `sbnd/plots_xsec/`: mean of the ML replicas vs the injected truth (`xsec_ml_*`), correlation matrices, 2D slices and the 2D correlation
+- `sbnd/plots_xsec/`: unfolded vs injected distributions with the `fds` band, mean of the ML replicas vs the injected truth (`xsec_ml_*`), correlation matrices, 2D slices and the 2D correlation
 - `sbnd/plots_syst/`: uncertainty budget by family, with and without normalisation, and the largest sources in each family
 
 Options:
-- `--iter`: OmniFold iteration to use (default 10, or the last one trained)
-- `--cov-source`: band in the result plots (default `all`); `--fds-cov-source`: band in the validation plots (default `fds`)
+- `--cov-source`: band in the result plots (default `all`); `--fds-cov-source`: band on the unfolded distributions (default `fds`)
+- `--mode`: universes used for the 2D correlation (default `hybrid`, as in step 4)
 - `--top-n 8`: sources shown per family breakdown
-- `validation` or `results` instead of `all` runs one part only
+- `all` instead of `results` also redoes the validation plots
 
 ## Things to try
 
-- Rerun the closure with the full settings (no `--niter`/`--ntrial`, about 5 min) and compare.
-- Make fake data with `--var true_costheta` or `--var both`, train it, and see whether it is recovered. There are no ML replicas for these tags, so `xsec_ml_*` is skipped.
+- Make fake data with `--var true_costheta` or `--var both`, train it, and check it with `MakePlots.py validation`. There are no ML replicas for these tags, so `xsec_ml_*` is skipped in `results`.
 - Run `covariance --source all --mode direct` and compare the totals with hybrid.
 - In `uncertainty_budget_true_p.png`, which family dominates, and how much of it is normalisation?

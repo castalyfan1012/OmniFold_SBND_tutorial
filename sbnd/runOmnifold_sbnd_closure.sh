@@ -2,8 +2,8 @@
 # Closure test: unfold the nominal MC onto itself. The result should give back
 # the nominal truth spectrum (all weights ~1).
 #
-#   nohup bash sbnd/runOmnifold_sbnd_closure.sh &                       # full: 10 iterations, 7 networks
-#   nohup bash sbnd/runOmnifold_sbnd_closure.sh --niter 5 --ntrial 1 &  # quick (~1-2 min)
+#   nohup bash sbnd/runOmnifold_sbnd_closure.sh &                       # 10 iterations, 3 networks
+#   nohup bash sbnd/runOmnifold_sbnd_closure.sh --ntrial 7 &            # more networks, less noise, ~2x slower
 #
 # Output: $SBND_RUNS_DIR/weights_sbnd_closure/ (default sbnd/runs), log: logs/closure.log
 
@@ -12,7 +12,7 @@ PY="${OMNIFOLD_VENV:-${REPO_DIR}/venv_omnifold}/bin/python3"
 [[ -x "$PY" ]] || { echo "No Python environment found. Run: source setup.sh"; exit 1; }
 
 NITER=10
-NTRIAL=7
+NTRIAL=3
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --niter)  NITER="$2";  shift 2 ;;
