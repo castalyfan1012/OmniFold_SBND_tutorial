@@ -85,7 +85,7 @@ There are two ways to get a universe's unfolded spectrum:
   includes how the unfolding responds to the change.
 - **direct**: the universe weights are applied straight to the true spectrum,
   without training. This assumes the unfolding gets the change exactly right,
-  which is fine for sources that are small or only change the normalisation.
+  which is fine for sources that are small or only change the normalization.
 
 `RunStudies.py screen` looks at the shape-only size of each source and picks
 the ones worth training (above 0.5 % in any bin); these are the `screened`
@@ -93,7 +93,7 @@ sources. The covariance then uses `hybrid` mode: unfolded universes for the
 screened sources and direct for the rest. Hybrid is the one we quote; `direct`
 for everything is a quick cross-check.
 
-Universes keep their normalisation (`KEEP_NORM = True` in `sbnd_config.py`), so
+Universes keep their normalization (`KEEP_NORM = True` in `sbnd_config.py`), so
 rate uncertainties are included, as needed for an absolute cross section.
 
 ---
@@ -187,12 +187,12 @@ python3 sbnd/RunStudies.py status
 been trained.
 
 `screen` computes each source without any training: the size per family and
-bin, with and without normalisation, and which sources are worth training
+bin, with and without normalization, and which sources are worth training
 (saved to `sbnd/covariance/screen_sources.json`). It also compares the sum of
 the single GENIE and flux knobs with the combined throws.
 
 - `--thresh 0.005`: train a source if its shape-only uncertainty is above 0.5 % in any bin
-- `--shape-only`: rescale every universe to the nominal total (default is to keep the normalisation)
+- `--shape-only`: rescale every universe to the nominal total (default is to keep the normalization)
 
 The links bring in the pretrained universes and ML replicas, and `status`
 shows how many are done. In the full analysis they are trained with (not
@@ -253,7 +253,7 @@ band (`sbnd/plots_xsec/xsec_fdt_tilt_p_alpha0.3_<var>.png`), and a table in
 `MakePlots.py results` makes the rest:
 
 - `sbnd/plots_xsec/`: unfolded vs injected distributions with the `fds` band, mean of the ML replicas vs the injected truth (`xsec_ml_*`), correlation matrices, 2D slices and the 2D correlation
-- `sbnd/plots_syst/`: uncertainty budget by family, with and without normalisation, and the largest sources in each family
+- `sbnd/plots_syst/`: uncertainty budget by family, with and without normalization, and the largest sources in each family
 
 Options:
 - `--cov-source`: band in the result plots (default `all`); `--fds-cov-source`: band on the unfolded distributions (default `fds`)
@@ -265,4 +265,4 @@ Options:
 
 - Make fake data with `--var true_costheta` or `--var both`, train it, and check it with `MakePlots.py validation`. There are no ML replicas for these tags, so `xsec_ml_*` is skipped in `results`.
 - Run `covariance --source all --mode direct` and compare the totals with hybrid.
-- In `uncertainty_budget_true_p.png`, which family dominates, and how much of it is normalisation?
+- In `uncertainty_budget_true_p.png`, which family dominates, and how much of it is normalization?
